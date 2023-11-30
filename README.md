@@ -2,8 +2,8 @@ The baseline  is constructed upon the nanoGPT project.
 First follow their setting written below.
 
 To do training, use config for config/train_gpt.2py
-To do fine-tuning, use --init_from=finetune
-To do evaluation, use config/Eval-SM.py
+To do fine-tuning, use --init_from=finetune -TODO
+To do evaluation, use config/EVAL.py
 
 To change to Gaussian Kernel, go to model.py and set self.use_softmax as False in CausalSelfAttention class. set it true to use softmax.
 To change to polynomial, set use_approx = True in the same place.

@@ -17,11 +17,11 @@ dataset = 'openwebtext'
 # dataset = 'TinyStories' 
 
 
-init_from = 'finetune'  #'gpt-2' #'manipulate'
+init_from = 'resume'  #'gpt-2' #'manipulate'
 
 
 
 
-wandb_run_name= 'small-prbl-weighted' + dataset  #'gpt2-proj-block-12hd-weighted'#'only_qk_gpt2_MSE_combined' #'CRAMMED-GK-exp-12lyr-12-40-ddp'
+wandb_run_name= 'fullft-4days-' + dataset  #'gpt2-proj-block-12hd-weighted'#'only_qk_gpt2_MSE_combined' #'CRAMMED-GK-exp-12lyr-12-40-ddp'
 wandb_project = 'finetune_score' #'FineTune Investigation' #'AttentionTransfer3'
-out_dir = 'attn_transfer/second-12hd-2nd'
+out_dir = 'LeResult/small-full_ft-4days'
