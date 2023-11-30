@@ -69,6 +69,9 @@ class CausalSelfAttention(nn.Module):
             # causal mask to ensure that attention is only applied to the left in the input sequence
             self.register_buffer("bias", torch.tril(torch.ones(config.block_size, config.block_size))
                                         .view(1, 1, config.block_size, config.block_size))
+        self.attn_type = config.attn_type
+        print(f"attention type : {self.attn_type}  ")
+        self.add_lora = config.add_lora
         #self.counter = 0
 
     def forward(self, x, get_qk=False):
@@ -83,9 +86,11 @@ class CausalSelfAttention(nn.Module):
         
         
         self.flash = False  #Set True for flash-attention
-        use_softmax = False #Set True for softmax, false for Gaussian Kernel
-        use_approx = False #Set True to use torch.exp, false to use polynomial approx
+        # use_softmax = False #Set True for softmax, false for Gaussian Kernel
+        # use_approx = False #Set True to use torch.exp, false to use polynomial approx
         return_qkdiff = get_qk
+        #print(f"using attention with {self.attn_type}")
+
 
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
         if self.flash:
@@ -93,7 +98,7 @@ class CausalSelfAttention(nn.Module):
             # efficient attention using Flash Attention CUDA kernels
             y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout if self.training else 0, is_causal=True)
 
-        elif use_softmax:
+        elif self.attn_type == "SM":
             
             # manual implementation of attention
             att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
@@ -103,15 +108,17 @@ class CausalSelfAttention(nn.Module):
             y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
             y = y.transpose(1, 2).contiguous().view(B, T, C) # re-assemble all head outputs side by side
 
-        else:
+        elif self.attn_type.startswith("GK"):
             #Gaussian Kernel
             qk_diff = subtraction_gaussian_kernel_torch(q, k)
             self.norm_factor = torch.tensor(1.0 / math.sqrt(k.size(-1))).to(q.device)
             qk_diff *= -self.norm_factor * 0.5
 
-            if use_approx:
+            if "poly" in self.attn_type:
             # exp approx mode
-                att = (lambda x: (1 + x / 2 ** 8) ** (2 ** 8))(qk_diff)
+                deg = eval(self.attn_type.split("-")[1])
+                #print(f"approximating to poly with degree : {deg}")
+                att = (lambda x: (1 + x / 2 ** deg) ** (2 ** deg))(qk_diff)
                 att = att.masked_fill(self.bias[:, :, :T, :T] == 0, 0)
 
             # exp mode
@@ -188,6 +195,9 @@ class GPTConfig:
     n_embd: int = 768
     dropout: float = 0.0
     bias: bool = False # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
+    attn_type: str = "SM"  # Type annotation added
+    add_lora: bool = False  # Type annotation added
+
 
 class GPT(nn.Module):
 
@@ -223,6 +233,7 @@ class GPT(nn.Module):
         print("number of parameters: %.2fM" % (self.get_num_params()/1e6,))
         #self.counter = 0
         #print("GPT INITIALIZATION IS FINE")
+
 
 
     def get_num_params(self, non_embedding=True):
@@ -301,9 +312,10 @@ class GPT(nn.Module):
     @classmethod
     def from_pretrained(cls, model_type, override_args=None):
         assert model_type in {'gpt2', 'gpt2-medium', 'gpt2-large', 'gpt2-xl'}
+        print(f"=================================  override_args : {override_args}")
         override_args = override_args or {} # default to empty dict
         # only dropout can be overridden see more notes below
-        assert all(k == 'dropout' for k in override_args)
+        #assert all(k == 'dropout' for k in override_args)
         from transformers import GPT2LMHeadModel
         print("loading weights from pretrained gpt: %s" % model_type)
 
@@ -322,6 +334,9 @@ class GPT(nn.Module):
         if 'dropout' in override_args:
             print(f"overriding dropout rate to {override_args['dropout']}")
             config_args['dropout'] = override_args['dropout']
+        if 'attn_type' in override_args:
+            print(f"overriding attn_type to {override_args['attn_type']}")
+            config_args['attn_type'] = override_args['attn_type']
         # create a from-scratch initialized minGPT model
         config = GPTConfig(**config_args)
         model = GPT(config)
