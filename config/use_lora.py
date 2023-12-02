@@ -16,8 +16,8 @@ gradient_accumulation_steps = 40
 max_iters = 3000
 lr_decay_iters = 3000
 # eval stuff
-eval_interval = 25
-eval_iters = 2000
+eval_interval = 100
+eval_iters = 100
 log_interval = 10
 
 # weight decay

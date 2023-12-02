@@ -27,7 +27,7 @@ import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 
-from model_lora import GPTConfig, GPT
+from model_am import GPTConfig, GPT
 
 from peft import inject_adapter_in_model, LoraConfig, get_peft_model
 import loralib as lora

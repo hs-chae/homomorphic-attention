@@ -142,6 +142,35 @@ class CausalSelfAttention(nn.Module):
             att = self.attn_dropout(att)
             y = att @ v
             y = y.transpose(1, 2).contiguous().view(B, T, C)
+        
+        elif self.attn_type.startswith("PA"):
+            ### Pointwise attention in IBM's "COnverting Transformers to Polynomial Form for Secure Inference Over HE" ###
+            activ_fn = self.attn_type.split("_")[1] #Decide the pointwise activation
+
+            if activ_fn == "gelu":
+                f = nn.GELU()
+            elif activ_fn == "relu":
+                f = nn.ReLU()
+            elif activ_fn == "sigmoid":
+                f = torch.sigmoid
+            elif activ_fn == "square":
+                f = lambda x : x**2
+            elif activ_fn == "relu-square":
+                relu =  nn.ReLU()
+                f = lambda x : relu(x)**2
+            else:
+                raise ValueError("Choose pointwise activation function")
+
+            att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
+            att = f(att)
+
+            att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
+            att = self.attn_dropout(att)
+            y = att @ v 
+            
+            length_scaler = 1/T
+            y *= length_scaler              #Post-act scaling
+            y = y.transpose(1, 2).contiguous().view(B, T, C)
 
         # output projection
         y = self.resid_dropout(self.c_proj(y))

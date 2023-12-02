@@ -6,11 +6,14 @@ To conduct fine-tuning, use --init_from=finetune with --out_dir="the directory y
 To do evaluation, use config/EVAL.py
 
 To change to Gaussian Kernel, set attn_type = "GK" in config, and for softmax, "SM"; for the polynomial approx of GK with degree n, set "GKpoly-8" in case n=8 for example.
+To change to pointwise activation, set attn_type = "PA_activation-function-name" and use config/PA.py
 
 
 TODO
 - add restarting from lora (you can finetune with lora via model_lora.py)
 - use different kernel
+- TF squeezing
+- Simplified TF
 
 
 
