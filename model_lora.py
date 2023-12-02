@@ -14,7 +14,7 @@ from dataclasses import dataclass
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
-
+import loralib as lora
 
 
 def subtraction_gaussian_kernel_torch(q, k):
@@ -56,10 +56,17 @@ class CausalSelfAttention(nn.Module):
         self.add_lora = config.add_lora
         if self.add_lora:
             print("ADDING LORA TO ATTENTION")
-
-        self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd, bias=config.bias)
+            self.c_attn = lora.Linear(config.n_embd, 3 * config.n_embd, bias=config.bias, r=16)
+        else:
+            print(f"NOT USING LORA because add_lora = {self.add_lora}")
+            self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd, bias=config.bias)
         # output projection
-        self.c_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
+
+        lora_proj = True
+        if lora_proj:
+            self.c_proj = lora.Linear(config.n_embd, config.n_embd, bias=config.bias, r=16)
+        else:
+            self.c_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
         # regularization
         self.attn_dropout = nn.Dropout(config.dropout)
         self.resid_dropout = nn.Dropout(config.dropout)
@@ -210,13 +217,10 @@ class GPT(nn.Module):
         super().__init__()
         assert config.vocab_size is not None
         assert config.block_size is not None
-        
-        if config.add_lora:
-            raise ValueError("To use LoRA please use model_lora.py for now")
-
-
+        assert config.add_lora is not None
         self.config = config
         print(f"GPT BIAS: = {config.bias}")
+        
 
         self.transformer = nn.ModuleDict(dict(
             wte = nn.Embedding(config.vocab_size, config.n_embd),
@@ -243,7 +247,7 @@ class GPT(nn.Module):
         print("number of parameters: %.2fM" % (self.get_num_params()/1e6,))
         #self.counter = 0
         #print("GPT INITIALIZATION IS FINE")
-
+        self.lora_file =True
 
 
     def get_num_params(self, non_embedding=True):
@@ -347,6 +351,9 @@ class GPT(nn.Module):
         if 'attn_type' in override_args:
             print(f"overriding attn_type to {override_args['attn_type']}")
             config_args['attn_type'] = override_args['attn_type']
+        if 'add_lora' in override_args:
+            print(f"overriding attn_type to {override_args['add_lora']}")
+            config_args['add_lora'] = override_args['add_lora']
         # create a from-scratch initialized minGPT model
         config = GPTConfig(**config_args)
         model = GPT(config)
@@ -365,7 +372,7 @@ class GPT(nn.Module):
         transposed = ['attn.c_attn.weight', 'attn.c_proj.weight', 'mlp.c_fc.weight', 'mlp.c_proj.weight']
         # basically the openai checkpoints use a "Conv1D" module, but we only want to use a vanilla Linear
         # this means that we have to transpose these weights when we import them
-        assert len(sd_keys_hf) == len(sd_keys), f"mismatched keys: {len(sd_keys_hf)} != {len(sd_keys)}"
+        # assert len(sd_keys_hf) == len(sd_keys), f"mismatched keys: {len(sd_keys_hf)} != {len(sd_keys)}"
         for k in sd_keys_hf:
             if any(k.endswith(w) for w in transposed):
                 # special treatment for the Conv1D weights we need to transpose

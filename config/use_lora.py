@@ -2,9 +2,10 @@
 # launch as the following (e.g. in a screen session) and wait ~5 days:
 # $ torchrun --standalone --nproc_per_node=8 train.py config/train_gpt2.py
 
-wandb_log = False
-wandb_project = 'layerwise distillation test'#'FineTune Investigation' #'AttentionTransfer3'
-wandb_run_name= 'small-prbl-weighted' #'gpt2-proj-block-12hd-weighted'#'only_qk_gpt2_MSE_combined' #'CRAMMED-GK-exp-12lyr-12-40-ddp'
+add_lora = True
+wandb_log = True
+wandb_project = 'lora test'#'FineTune Investigation' #'AttentionTransfer3'
+
 
 # these make the total batch size be ~0.5M
 batch_size = 12
@@ -12,8 +13,8 @@ block_size = 1024
 gradient_accumulation_steps = 40
 
 # this makes total number of tokens be 300B
-max_iters = 100000
-lr_decay_iters = 100000
+max_iters = 3000
+lr_decay_iters = 3000
 # eval stuff
 eval_interval = 25
 eval_iters = 2000
@@ -23,12 +24,12 @@ log_interval = 10
 weight_decay = 1e-1
 
 compile=False
-out_dir = 'TheFuture/small-prbl-weighted' #'config/GK-exp2poly-12lyrs-combined'
-
+out_dir = 'TheFuture/small-lora_proj-3000' #'config/GK-exp2poly-12lyrs-combined'
+wandb_run_name= 'small-lora_proj-3000' #'gpt2-proj-block-12hd-weighted'#'only_qk_gpt2_MSE_combined' #'CRAMMED-GK-exp-12lyr-12-40-ddp'
 dataset = 'openwebtext'
 
 bias=True
-init_from = 'gpt2-large' #'finetune_engineer' #'engineer'
+init_from = 'lora_gpt2' 
 dropout = 0.0
 
 attn_type="GK"

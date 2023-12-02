@@ -27,7 +27,10 @@ import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 
-from model import GPTConfig, GPT
+from model_lora import GPTConfig, GPT
+
+from peft import inject_adapter_in_model, LoraConfig, get_peft_model
+import loralib as lora
 
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
@@ -209,7 +212,85 @@ elif init_from == 'finetune':
         if k.startswith(unwanted_prefix):
             state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
     model.load_state_dict(state_dict, strict=False)
+    try : model.load_state_dict(torch.load('ckpt_lora.pt'), strict=False)
+    except : print("LORA checkpoint DID NOT WORK!!!!!!!!!!")
     best_val_loss = checkpoint['best_val_loss']
+
+    if add_lora:
+        print()
+        print("=====================USING LORA=====================================")
+        lora.mark_only_lora_as_trainable(model)
+
+elif init_from.startswith('layerwise'):
+    print(f"Layerwise Finetuning into {out_dir}")
+    teacher = init_from.split("_")[1]
+    
+
+    override_args = dict(dropout=dropout, attn_type=attn_type, add_lora=add_lora)
+    model = GPT.from_pretrained(teacher, override_args)
+
+    try : assert model.is_am
+    except :  raise ValueError("Use model_am.py") 
+
+    for param in model.parameters():
+        param.requires_grad = False
+
+
+    for i, block in enumerate(model.transformer.h):
+        block.copy_weights()
+
+        
+        block.attn.c_attn.weight.requires_grad = True
+        block.attn.c_attn.bias.requires_grad = True
+    
+        block.attn.c_proj.weight.requires_grad = True
+        block.attn.c_proj.bias.requires_grad = False
+
+        # if block.attn.c_attn.bias is not None:
+        #         #print("attn bias copied")
+        #         self.base.c_attn.bias.copy_(self.attn.c_attn.bias)
+        #     if self.attn.c_proj.bias is not None:
+        #         #print("proj bias copied")
+        #         self.base.c_proj.bias.copy_(self.attn.c_proj.bias)
+    
+    print()
+    print("=============================================================PARAMETERS")
+    for name, param in model.named_parameters():
+        print(name, param.size())
+    # resume training from a checkpoint.
+
+    print("=============================================================PARAMETERS")
+    
+    # force these config attributes to be equal otherwise we can't even resume training
+    # the rest of the attributes (e.g. dropout) can stay as desired from command line
+   
+    # create the model
+    
+
+elif init_from.startswith('lora'):
+    
+    teacher = init_from.split("_")[1]
+    print(f"LoRA tuning from pretrained {teacher} into {out_dir}")
+
+    override_args = dict(dropout=dropout, attn_type=attn_type, add_lora=add_lora)
+    model = GPT.from_pretrained(teacher, override_args)
+
+    assert add_lora
+    try : assert model.lora_file
+    except :  raise ValueError("Use model_lora.py") 
+
+    lora.mark_only_lora_as_trainable(model)
+    
+    print()
+    print("=============================================================PARAMETERS")
+    for name, param in model.named_parameters():
+        print(name, param.size())
+    print("=============================================================PARAMETERS")
+    print()
+
+
+
+
 elif init_from.startswith('gpt2'):
     print(f"Initializing from OpenAI GPT-2 weights: {init_from}")
     # initialize from OpenAI GPT-2 weights
@@ -218,6 +299,10 @@ elif init_from.startswith('gpt2'):
     # read off the created config params, so we can store them into checkpoint correctly
     for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size']:
         model_args[k] = getattr(model.config, k)
+    if add_lora:
+        print()
+        print("=====================USING LORA=====================================")
+        lora.mark_only_lora_as_trainable(model)
 # crop down the model block size if desired, using model surgery
 if block_size < model.config.block_size:
     model.crop_block_size(block_size)
@@ -315,7 +400,10 @@ while True:
                     'config': config,
                 }
                 print(f"saving checkpoint to {out_dir}")
-                torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
+                if add_lora:
+                    torch.save(lora.lora_state_dict(model), os.path.join(out_dir, 'ckpt.pt'))
+                else:
+                    torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
     if iter_num == 0 and eval_only:
         break
 
