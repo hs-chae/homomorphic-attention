@@ -3,7 +3,7 @@
 # $ torchrun --standalone --nproc_per_node=8 train.py config/train_gpt2.py
 
 wandb_log = True
-wandb_project = 'layerwise distillation test'#'FineTune Investigation' #'AttentionTransfer3'
+wandb_project = 'attn_transfer'#'FineTune Investigation' #'AttentionTransfer3'
 
 
 # these make the total batch size be ~0.5M
@@ -12,8 +12,8 @@ block_size = 1024
 gradient_accumulation_steps = 40
 
 # this makes total number of tokens be 300B
-max_iters = 3000
-lr_decay_iters = 3000
+max_iters = 2000
+lr_decay_iters = max_iters
 # eval stuff
 eval_interval = 100
 eval_iters = 100
@@ -23,8 +23,9 @@ log_interval = 10
 weight_decay = 1e-1
 
 compile=False
-out_dir = 'TheFuture/small-prbl-PA' #'config/GK-exp2poly-12lyrs-combined'
-wandb_run_name= 'small-prbl-PA' #'gpt2-proj-block-12hd-weighted'#'only_qk_gpt2_MSE_combined' #'CRAMMED-GK-exp-12lyr-12-40-ddp'
+wandb_run_name= 'small-preatn-2k' #'gpt2-proj-block-12hd-weighted'#'only_qk_gpt2_MSE_combined' #'CRAMMED-GK-exp-12lyr-12-40-ddp'
+out_dir = 'TheFuture/prep-' + wandb_run_name #'config/GK-exp2poly-12lyrs-combined'
+
 dataset = 'openwebtext'
 
 bias=True
@@ -32,6 +33,7 @@ init_from = 'layerwise_gpt2'
 dropout = 0.0
 
 attn_type="GK"
+add_lora = False
 
 # # #gpt-2 base
 # n_layer = 12

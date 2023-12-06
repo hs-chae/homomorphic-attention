@@ -13,8 +13,8 @@ block_size = 1024
 gradient_accumulation_steps = 40
 
 # this makes total number of tokens be 300B
-max_iters = 3000
-lr_decay_iters = 3000
+max_iters = 1000
+lr_decay_iters = 1000
 # eval stuff
 eval_interval = 100
 eval_iters = 100
@@ -24,8 +24,8 @@ log_interval = 10
 weight_decay = 1e-1
 
 compile=False
-out_dir = 'TheFuture/small-lora_proj-3000' #'config/GK-exp2poly-12lyrs-combined'
-wandb_run_name= 'small-lora_proj-3000' #'gpt2-proj-block-12hd-weighted'#'only_qk_gpt2_MSE_combined' #'CRAMMED-GK-exp-12lyr-12-40-ddp'
+out_dir = 'TheFuture/small-lora_proj-3000' #'TheFuture/small-lora_qkv-3000' #'config/GK-exp2poly-12lyrs-combined'
+wandb_run_name= 'small-lora_qkv-3000' #'gpt2-proj-block-12hd-weighted'#'only_qk_gpt2_MSE_combined' #'CRAMMED-GK-exp-12lyr-12-40-ddp'
 dataset = 'openwebtext'
 
 bias=True
@@ -33,7 +33,7 @@ init_from = 'lora_gpt2'
 dropout = 0.0
 
 attn_type="GK"
-
+always_save_checkpoint=True
 # # #gpt-2 base
 # n_layer = 12
 # n_head = 12

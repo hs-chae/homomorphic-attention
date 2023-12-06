@@ -31,6 +31,7 @@ from model_am import GPTConfig, GPT
 
 from peft import inject_adapter_in_model, LoraConfig, get_peft_model
 import loralib as lora
+from torch.profiler import profile, record_function, ProfilerActivity
 
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
@@ -66,7 +67,7 @@ beta2 = 0.95
 grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
 # learning rate decay settings
 decay_lr = True # whether to decay the learning rate
-warmup_iters = 2000 # how many steps to warm up for
+warmup_iters = 500 # how many steps to warm up for
 lr_decay_iters = 600000 # should be ~= max_iters per Chinchilla
 min_lr = 6e-5 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
 # DDP settings
@@ -213,7 +214,7 @@ elif init_from == 'finetune':
             state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
     model.load_state_dict(state_dict, strict=False)
     try : model.load_state_dict(torch.load('ckpt_lora.pt'), strict=False)
-    except : print("LORA checkpoint DID NOT WORK!!!!!!!!!!")
+    except : print("-=-=-=-=-=-=-=--=-=-=-=-=-=-=-=-=-=-=--=-=-=-=-=-=-=-=-=-=-=-=-=--=-=-=-=-=---=-=-LORA checkpoint DID NOT WORK!!!!!!!!!!")
     best_val_loss = checkpoint['best_val_loss']
 
     if add_lora:
@@ -244,7 +245,61 @@ elif init_from.startswith('layerwise'):
         block.attn.c_attn.bias.requires_grad = True
     
         block.attn.c_proj.weight.requires_grad = True
-        block.attn.c_proj.bias.requires_grad = False
+        block.attn.c_proj.bias.requires_grad = True
+
+        # if block.attn.c_attn.bias is not None:
+        #         #print("attn bias copied")
+        #         self.base.c_attn.bias.copy_(self.attn.c_attn.bias)
+        #     if self.attn.c_proj.bias is not None:
+        #         #print("proj bias copied")
+        #         self.base.c_proj.bias.copy_(self.attn.c_proj.bias)
+    
+    print()
+    print("=============================================================PARAMETERS")
+    for name, param in model.named_parameters():
+        print(name, param.size())
+    # resume training from a checkpoint.
+
+    print("=============================================================PARAMETERS")
+    
+    # force these config attributes to be equal otherwise we can't even resume training
+    # the rest of the attributes (e.g. dropout) can stay as desired from command line
+   
+    # create the model
+
+elif init_from.startswith('squeeze'):
+    print(f"Squeezing into {out_dir}")
+    teacher = init_from.split("_")[1]
+    
+
+    override_args = dict(dropout=dropout, attn_type=attn_type, add_lora=add_lora)
+    model = GPT.from_pretrained(teacher, override_args)
+
+    try : assert model.is_am
+    except :  raise ValueError("Use model_am.py") 
+
+    if add_lora:
+        print("USING LORA in layerwise training")
+        lora.mark_only_lora_as_trainable(model)
+        for i, block in enumerate(model.transformer.h):
+            block.copy_weights()
+    
+    else:
+        print("Not using LoRA in layerwise traning")
+        for param in model.parameters():
+            param.requires_grad = False
+
+        
+
+        for i, block in enumerate(model.transformer.h):
+            block.copy_weights()
+
+            
+            block.attn.c_attn.weight.requires_grad = True
+            block.attn.c_attn.bias.requires_grad = True
+        
+            block.attn.c_proj.weight.requires_grad = True
+            block.attn.c_proj.bias.requires_grad = False
 
         # if block.attn.c_attn.bias is not None:
         #         #print("attn bias copied")
@@ -303,6 +358,43 @@ elif init_from.startswith('gpt2'):
         print()
         print("=====================USING LORA=====================================")
         lora.mark_only_lora_as_trainable(model)
+
+elif init_from.startswith('continued'):
+    base=init_from.split("_")[1]
+    print(f"Continuing Lora from Huggingface GPT-2 weights: {base}")
+    # initialize from OpenAI GPT-2 weights
+    
+    override_args = dict(dropout=dropout, attn_type=attn_type, add_lora=add_lora)
+    model = GPT.from_pretrained(base, override_args)
+    # read off the created config params, so we can store them into checkpoint correctly
+    for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size']:
+        model_args[k] = getattr(model.config, k)
+    
+    
+    ckpt_path = os.path.join(out_dir, 'ckpt.pt') #LoRA MODEL
+    checkpoint = torch.load(ckpt_path, map_location=device)
+
+
+    model.load_state_dict(checkpoint, strict=False)
+
+
+    # state_dict = checkpoint['model'] What shoudl we do with this
+
+    
+
+    # # fix the keys of the state dictionary :(
+    # # honestly no idea how checkpoints sometimes get this prefix, have to debug more
+    # unwanted_prefix = '_orig_mod.'
+    # for k,v in list(state_dict.items()):
+    #     if k.startswith(unwanted_prefix):
+    #         state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
+    # model.load_state_dict(state_dict, strict=False)
+
+    if add_lora:
+        print()
+        print("=====================USING LORA=====================================")
+        lora.mark_only_lora_as_trainable(model)
+    
 # crop down the model block size if desired, using model surgery
 if block_size < model.config.block_size:
     model.crop_block_size(block_size)
@@ -401,9 +493,18 @@ while True:
                 }
                 print(f"saving checkpoint to {out_dir}")
                 if add_lora:
-                    torch.save(lora.lora_state_dict(model), os.path.join(out_dir, 'ckpt.pt'))
+                    checkpoint = {
+                    'model': lora.lora_state_dict(model),
+                    'optimizer': optimizer.state_dict(),
+                    'model_args': model_args,
+                    'iter_num': iter_num,
+                    'best_val_loss': best_val_loss,
+                    'config': config,
+                    }
+                    torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
                 else:
                     torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
+        else: print(f"checkpoint not saved becauase asc : {always_save_checkpoint}")
     if iter_num == 0 and eval_only:
         break
 
@@ -449,7 +550,7 @@ while True:
     local_iter_num += 1
 
     # termination conditions
-    if iter_num > max_iters:
+    if iter_num > max_iters: #or loss.item()<1 :
         break
 
 if ddp:
