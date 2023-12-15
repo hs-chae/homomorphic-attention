@@ -12,7 +12,7 @@ wandb_log = True
 
 dataset = 'openwebtext' 
 # dataset = 'wiki' 
-# dataset = 'lambada' 
+dataset = 'lambada' 
 # dataset = 'ptb' 
 # dataset = 'TinyStories' 
 
@@ -25,7 +25,7 @@ init_from = 'finetune' #'finetune'  #'gpt-2' #'manipulate'
 
 
 wandb_project = 'finetune_score' #'FineTune Investigation' #'AttentionTransfer3'
-out_dir =  'TheFuture/small-full_ft-1750' #'LeResult/small-full_ft-6dyas'  #"TheFuture/small-prbl-PA-relu_square" #"LORATEST"#'TheFuture/small-prbl-lora' #'LeResult/small-full_ft-4days'
+out_dir ='TheFuture/extreme-small-prbl-21k'# 'TheFuture/prep-small-prbl-2k-700'#'TheFuture/small-prbl-3350-500' #'TheFuture/prep-small-prbl-2k-300' #'LeResult/small-full_ft-6dyas'  #"TheFuture/small-prbl-PA-relu_square" #"LORATEST"#'TheFuture/small-prbl-lora' #'LeResult/small-full_ft-4days'
 wandb_run_name= out_dir + '-' + dataset  #'gpt2-proj-block-12hd-weighted'#'only_qk_gpt2_MSE_combined' #'CRAMMED-GK-exp-12lyr-12-40-ddp'
 
 attn_type= "GK"

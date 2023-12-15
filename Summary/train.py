@@ -29,9 +29,9 @@ from torch.distributed import init_process_group, destroy_process_group
 
 from model import GPTConfig, GPT
 
-from peft import inject_adapter_in_model, LoraConfig, get_peft_model
+
 import loralib as lora
-from torch.profiler import profile, record_function, ProfilerActivity
+
 
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
@@ -193,167 +193,6 @@ elif init_from == 'resume':
     model.load_state_dict(state_dict, strict=False)
     iter_num = checkpoint['iter_num']
     best_val_loss = checkpoint['best_val_loss']
-elif init_from == 'finetune':
-    print(f"Finetuning from {out_dir}")
-    # resume training from a checkpoint.
-    ckpt_path = os.path.join(out_dir, 'ckpt.pt')
-    checkpoint = torch.load(ckpt_path, map_location=device)
-    checkpoint_model_args = checkpoint['model_args']
-    # force these config attributes to be equal otherwise we can't even resume training
-    # the rest of the attributes (e.g. dropout) can stay as desired from command line
-    print(f"================================================CHECKPOINT ITER NUM : {checkpoint['iter_num']}=========================================")
-    print(f'VC 1  :  =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= {checkpoint_model_args["vocab_size"]}')
-    if checkpoint_model_args["vocab_size"] is None:
-        checkpoint_model_args["vocab_size"] = meta_vocab_size if meta_vocab_size is not None else 50257
-    for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size']:
-        model_args[k] = checkpoint_model_args[k]
-    model_args['attn_type'] = attn_type
-    model_args['add_lora'] = add_lora
-    # create the model
-    gptconf = GPTConfig(**model_args)
-    print(f'VC 2  :  =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= {gptconf.vocab_size}')
-    print(f"=================================   gptconf attn type : {gptconf.attn_type}")
-    print(f"=================================   gptconf add_lora : {gptconf.add_lora}")
-    model = GPT(gptconf)
-    state_dict = checkpoint['model']
-    # fix the keys of the state dictionary :(
-    # honestly no idea how checkpoints sometimes get this prefix, have to debug more
-    unwanted_prefix = '_orig_mod.'
-    for k,v in list(state_dict.items()):
-        if k.startswith(unwanted_prefix):
-            state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
-    model.load_state_dict(state_dict, strict=False)
-    try : model.load_state_dict(torch.load('ckpt_lora.pt'), strict=False)
-    except : print("-=-=-=-=-=-=-=--=-=-=-=-=-=-=-=-=-=-=--=-=-=-=-=-=-=-=-=-=-=-=-=--=-=-=-=-=---=-=-LORA checkpoint DID NOT WORK!!!!!!!!!!")
-    best_val_loss = checkpoint['best_val_loss']
-
-    if add_lora:
-        print()
-        print("=====================USING LORA=====================================")
-        lora.mark_only_lora_as_trainable(model)
-
-elif init_from.startswith('layerwise'):
-    print(f"Layerwise Finetuning into {out_dir}")
-    teacher = init_from.split("_")[1]
-    
-
-    override_args = dict(dropout=dropout, attn_type=attn_type, add_lora=add_lora)
-    model = GPT.from_pretrained(teacher, override_args)
-
-    try : assert model.is_am
-    except :  raise ValueError("Use model_am.py") 
-
-    for param in model.parameters():
-        param.requires_grad = False
-
-
-    for i, block in enumerate(model.transformer.h):
-        block.copy_weights()
-
-        
-        block.attn.c_attn.weight.requires_grad = True
-        block.attn.c_attn.bias.requires_grad = True
-    
-        block.attn.c_proj.weight.requires_grad = True
-        block.attn.c_proj.bias.requires_grad = True
-
-        # if block.attn.c_attn.bias is not None:
-        #         #print("attn bias copied")
-        #         self.base.c_attn.bias.copy_(self.attn.c_attn.bias)
-        #     if self.attn.c_proj.bias is not None:
-        #         #print("proj bias copied")
-        #         self.base.c_proj.bias.copy_(self.attn.c_proj.bias)
-    
-    print()
-    print("=============================================================PARAMETERS")
-    for name, param in model.named_parameters():
-        print(name, param.size())
-    # resume training from a checkpoint.
-
-    print("=============================================================PARAMETERS")
-    
-    # force these config attributes to be equal otherwise we can't even resume training
-    # the rest of the attributes (e.g. dropout) can stay as desired from command line
-   
-    # create the model
-
-elif init_from.startswith('squeeze'):
-    print(f"Squeezing into {out_dir}")
-    teacher = init_from.split("_")[1]
-    
-
-    override_args = dict(dropout=dropout, attn_type=attn_type, add_lora=add_lora)
-    model = GPT.from_pretrained(teacher, override_args)
-
-    try : assert model.is_am
-    except :  raise ValueError("Use model_am.py") 
-
-    if add_lora:
-        print("USING LORA in layerwise training")
-        lora.mark_only_lora_as_trainable(model)
-        for i, block in enumerate(model.transformer.h):
-            block.copy_weights()
-    
-    else:
-        print("Not using LoRA in layerwise traning")
-        for param in model.parameters():
-            param.requires_grad = False
-
-        
-
-        for i, block in enumerate(model.transformer.h):
-            block.copy_weights()
-
-            
-            block.attn.c_attn.weight.requires_grad = True
-            block.attn.c_attn.bias.requires_grad = True
-        
-            block.attn.c_proj.weight.requires_grad = True
-            block.attn.c_proj.bias.requires_grad = False
-
-        # if block.attn.c_attn.bias is not None:
-        #         #print("attn bias copied")
-        #         self.base.c_attn.bias.copy_(self.attn.c_attn.bias)
-        #     if self.attn.c_proj.bias is not None:
-        #         #print("proj bias copied")
-        #         self.base.c_proj.bias.copy_(self.attn.c_proj.bias)
-    
-    print()
-    print("=============================================================PARAMETERS")
-    for name, param in model.named_parameters():
-        print(name, param.size())
-    # resume training from a checkpoint.
-
-    print("=============================================================PARAMETERS")
-    
-    # force these config attributes to be equal otherwise we can't even resume training
-    # the rest of the attributes (e.g. dropout) can stay as desired from command line
-   
-    # create the model
-    
-
-elif init_from.startswith('lora'):
-    
-    teacher = init_from.split("_")[1]
-    print(f"LoRA tuning from pretrained {teacher} into {out_dir}")
-
-    override_args = dict(dropout=dropout, attn_type=attn_type, add_lora=add_lora)
-    model = GPT.from_pretrained(teacher, override_args)
-
-    assert add_lora
-    try : assert model.lora_file
-    except :  raise ValueError("Use model_lora.py") 
-
-    lora.mark_only_lora_as_trainable(model)
-    
-    print()
-    print("=============================================================PARAMETERS")
-    for name, param in model.named_parameters():
-        print(name, param.size())
-    print("=============================================================PARAMETERS")
-    print()
-
-
 
 
 elif init_from.startswith('gpt2'):
@@ -369,42 +208,6 @@ elif init_from.startswith('gpt2'):
         print("=====================USING LORA=====================================")
         lora.mark_only_lora_as_trainable(model)
 
-elif init_from.startswith('continued'):
-    base=init_from.split("_")[1]
-    print(f"Continuing Lora from Huggingface GPT-2 weights: {base}")
-    # initialize from OpenAI GPT-2 weights
-    
-    override_args = dict(dropout=dropout, attn_type=attn_type, add_lora=add_lora)
-    model = GPT.from_pretrained(base, override_args)
-    # read off the created config params, so we can store them into checkpoint correctly
-    for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size']:
-        model_args[k] = getattr(model.config, k)
-    
-    
-    ckpt_path = os.path.join(out_dir, 'ckpt.pt') #LoRA MODEL
-    checkpoint = torch.load(ckpt_path, map_location=device)
-
-
-    
-
-    state_dict = checkpoint['model'] #What shoudl we do with this
-
-    model.load_state_dict(state_dict, strict=False)
-
-    
-
-    # # fix the keys of the state dictionary :(
-    # # honestly no idea how checkpoints sometimes get this prefix, have to debug more
-    # unwanted_prefix = '_orig_mod.'
-    # for k,v in list(state_dict.items()):
-    #     if k.startswith(unwanted_prefix):
-    #         state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
-    # model.load_state_dict(state_dict, strict=False)
-
-    if add_lora:
-        print()
-        print("=====================USING LORA=====================================")
-        lora.mark_only_lora_as_trainable(model)
     
 # crop down the model block size if desired, using model surgery
 if block_size < model.config.block_size:

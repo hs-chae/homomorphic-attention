@@ -16,16 +16,16 @@ gradient_accumulation_steps = 40
 max_iters = 1000
 lr_decay_iters = 1000
 # eval stuff
-eval_interval = 100
-eval_iters = 100
+eval_interval = 500
+eval_iters = 30
 log_interval = 10
 
 # weight decay
 weight_decay = 1e-1
 
 compile=False
-out_dir = 'TheFuture/small-lora_proj-3000' #'TheFuture/small-lora_qkv-3000' #'config/GK-exp2poly-12lyrs-combined'
-wandb_run_name= 'small-lora_qkv-3000' #'gpt2-proj-block-12hd-weighted'#'only_qk_gpt2_MSE_combined' #'CRAMMED-GK-exp-12lyr-12-40-ddp'
+out_dir = 'TheFuture/re-small-lora_proj-3000' #'TheFuture/small-lora_qkv-3000' #'config/GK-exp2poly-12lyrs-combined'
+wandb_run_name= out_dir #'gpt2-proj-block-12hd-weighted'#'only_qk_gpt2_MSE_combined' #'CRAMMED-GK-exp-12lyr-12-40-ddp'
 dataset = 'openwebtext'
 
 bias=True

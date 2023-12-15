@@ -12,19 +12,19 @@ block_size = 1024
 gradient_accumulation_steps = 40
 
 # this makes total number of tokens be 300B
-max_iters = 2000
+max_iters = 100000
 lr_decay_iters = max_iters
 # eval stuff
-eval_interval = 100
-eval_iters = 100
+eval_interval = 1000
+eval_iters = 50
 log_interval = 10
 
 # weight decay
 weight_decay = 1e-1
 
 compile=False
-wandb_run_name= 'small-preatn-2k' #'gpt2-proj-block-12hd-weighted'#'only_qk_gpt2_MSE_combined' #'CRAMMED-GK-exp-12lyr-12-40-ddp'
-out_dir = 'TheFuture/prep-' + wandb_run_name #'config/GK-exp2poly-12lyrs-combined'
+wandb_run_name= 'small-prbl-100k' #'gpt2-proj-block-12hd-weighted'#'only_qk_gpt2_MSE_combined' #'CRAMMED-GK-exp-12lyr-12-40-ddp'
+out_dir = 'TheFuture/extreme-' + wandb_run_name #'config/GK-exp2poly-12lyrs-combined'
 
 dataset = 'openwebtext'
 
