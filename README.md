@@ -1,5 +1,6 @@
 ### This project is constructed upon the nanoGPT project.
 ### First follow their setting written below.
+### For summarized version go to the directory "/Summary" 
 
 To do training, use config for config/train_gpt.2py
 To conduct fine-tuning, use --init_from=finetune with --out_dir="the directory you want to start finetuning from" 
